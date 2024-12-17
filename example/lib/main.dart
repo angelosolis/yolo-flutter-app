@@ -21,6 +21,8 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final controller = UltralyticsYoloCameraController();
+  bool isDetecting = false;
+  bool modelLoaded = false; // Flag to track if model is loaded
 
   @override
   Widget build(BuildContext context) {
@@ -40,77 +42,85 @@ class _MyAppState extends State<MyApp> {
               builder: (context, snapshot) {
                 final predictor = snapshot.data;
 
-                return predictor == null
-                    ? Container()
-                    : Stack(
-                  children: [
-                    UltralyticsYoloCameraPreview(
-                      controller: controller,
-                      predictor: predictor,
-                      onCameraCreated: () {
-                        predictor.loadModel(useGpu: true);
-                      },
-                    ),
-                    StreamBuilder<double?>(
-                      stream: predictor.inferenceTime,
-                      builder: (context, snapshot) {
-                        final inferenceTime = snapshot.data;
+                if (predictor == null) {
+                  return Container();
+                }
 
-                        return StreamBuilder<double?>(
-                          stream: predictor.fpsRate,
+                // Load model before enabling detection
+                if (!modelLoaded) {
+                  predictor.loadModel(useGpu: false).then((_) {
+                    setState(() {
+                      modelLoaded = true;
+                    });
+                  });
+                }
+
+                return GestureDetector(
+                  onTapDown: (_) {
+                    if (modelLoaded) {
+                      setState(() {
+                        isDetecting = true; // Start detection after model is loaded
+                      });
+                    }
+                  },
+                  onTapUp: (_) {
+                    setState(() {
+                      isDetecting = false; // Stop detection
+                    });
+                  },
+                  onTapCancel: () {
+                    setState(() {
+                      isDetecting = false; // Stop detection if tap is canceled
+                    });
+                  },
+                  child: Stack(
+                    children: [
+                      UltralyticsYoloCameraPreview(
+                        controller: controller,
+                        predictor: isDetecting ? predictor : null,
+                        onCameraCreated: () {
+                          if (isDetecting && modelLoaded) {
+                            predictor.loadModel(useGpu: false);
+                          }
+                        },
+                      ),
+                      if (isDetecting)
+                        StreamBuilder<double?>(
+                          stream: predictor.inferenceTime,
                           builder: (context, snapshot) {
-                            final fpsRate = snapshot.data;
+                            final inferenceTime = snapshot.data;
 
-                            return Times(
-                              inferenceTime: inferenceTime,
-                              fpsRate: fpsRate,
+                            return StreamBuilder<double?>(
+                              stream: predictor.fpsRate,
+                              builder: (context, snapshot) {
+                                final fpsRate = snapshot.data;
+
+                                return Times(
+                                  inferenceTime: inferenceTime,
+                                  fpsRate: fpsRate,
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
-                  ],
+                        ),
+                      Positioned(
+                        top: 40,
+                        left: 0,
+                        right: 0,
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: Image.asset(
+                            'assets/Icon_Text.png', // Your logo
+                            width: 150,
+                            height: 150,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             );
-            // : FutureBuilder<ObjectClassifier>(
-            //     future: _initObjectClassifierWithLocalModel(),
-            //     builder: (context, snapshot) {
-            //       final predictor = snapshot.data;
-
-            //       return predictor == null
-            //           ? Container()
-            //           : Stack(
-            //               children: [
-            //                 UltralyticsYoloCameraPreview(
-            //                   controller: controller,
-            //                   predictor: predictor,
-            //                   onCameraCreated: () {
-            //                     predictor.loadModel();
-            //                   },
-            //                 ),
-            //                 StreamBuilder<double?>(
-            //                   stream: predictor.inferenceTime,
-            //                   builder: (context, snapshot) {
-            //                     final inferenceTime = snapshot.data;
-
-            //                     return StreamBuilder<double?>(
-            //                       stream: predictor.fpsRate,
-            //                       builder: (context, snapshot) {
-            //                         final fpsRate = snapshot.data;
-
-            //                         return Times(
-            //                           inferenceTime: inferenceTime,
-            //                           fpsRate: fpsRate,
-            //                         );
-            //                       },
-            //                     );
-            //                   },
-            //                 ),
-            //               ],
-            //             );
-            //     },
-            //   );
           },
         ),
         floatingActionButton: FloatingActionButton(
@@ -124,13 +134,6 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<ObjectDetector> _initObjectDetectorWithLocalModel() async {
-    // final modelPath = await _copy('assets/yolov8n.mlmodel');
-    // final model = LocalYoloModel(
-    //   id: '',
-    //   task: Task.detect,
-    //   format: Format.coreml,
-    //   modelPath: modelPath,
-    // );
     final modelPath = await _copy('assets/yolov8n_int8.tflite');
     final metadataPath = await _copy('assets/metadata.yaml');
     final model = LocalYoloModel(
@@ -142,29 +145,6 @@ class _MyAppState extends State<MyApp> {
     );
 
     return ObjectDetector(model: model);
-  }
-
-  Future<ImageClassifier> _initImageClassifierWithLocalModel() async {
-    final modelPath = await _copy('assets/yolov8n-cls.mlmodel');
-    final model = LocalYoloModel(
-      id: '',
-      task: Task.classify,
-      format: Format.coreml,
-      modelPath: modelPath,
-    );
-
-    // final modelPath = await _copy('assets/yolov8n-cls.bin');
-    // final paramPath = await _copy('assets/yolov8n-cls.param');
-    // final metadataPath = await _copy('assets/metadata-cls.yaml');
-    // final model = LocalYoloModel(
-    //   id: '',
-    //   task: Task.classify,
-    //   modelPath: modelPath,
-    //   paramPath: paramPath,
-    //   metadataPath: metadataPath,
-    // );
-
-    return ImageClassifier(model: model);
   }
 
   Future<String> _copy(String assetPath) async {

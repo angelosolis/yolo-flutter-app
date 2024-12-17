@@ -10,7 +10,7 @@
     <application
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:label="ultralytics_yolo_example">
+        android:label="Currensee Offline">
 
         <uses-library
             android:name="libOpenCL.so"

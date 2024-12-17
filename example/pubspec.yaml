@@ -18,6 +18,7 @@ dependencies:
   flutter:
     sdk: flutter
 
+
   ultralytics_yolo:
     path: ../
   path: ^1.9.0

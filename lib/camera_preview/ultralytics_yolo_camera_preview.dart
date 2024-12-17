@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo_platform_interface.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 const String _viewType = 'ultralytics_yolo_camera_preview';
 
@@ -47,6 +48,8 @@ class UltralyticsYoloCameraPreview extends StatefulWidget {
 
 class _UltralyticsYoloCameraPreviewState
     extends State<UltralyticsYoloCameraPreview> {
+  final _flutterTts = FlutterTts();
+  bool isSpeaking = false;
   final _ultralyticsYoloPlatform = UltralyticsYoloPlatform.instance;
 
   double _currentZoomFactor = 1;
@@ -107,14 +110,37 @@ class _UltralyticsYoloCameraPreviewState
               switch (widget.predictor.runtimeType) {
                 case ObjectDetector:
                   return StreamBuilder(
-                    stream: (widget.predictor! as ObjectDetector)
-                        .detectionResultStream,
+                    stream: (widget.predictor! as ObjectDetector).detectionResultStream,
                     builder: (
-                      BuildContext context,
-                      AsyncSnapshot<List<DetectedObject?>?> snapshot,
-                    ) {
+                        BuildContext context,
+                        AsyncSnapshot<List<DetectedObject?>?> snapshot,
+                        ) {
                       if (snapshot.data == null) return Container();
 
+                      // Process detected objects
+                      for (int i = 0; i < snapshot.data!.length; i++) {
+                        final detectedObject = snapshot.data![i];
+                        if (detectedObject != null) {
+                          final label = detectedObject.label;
+                          if (label != null) {
+                            // Only speak if TTS is not already speaking
+                            if (!isSpeaking) {
+                              _flutterTts.speak(label + "peso detected"); // Speak the detected label
+                              isSpeaking = true; // Set isSpeaking flag to true
+
+                              // Set a callback when TTS is finished
+                              _flutterTts.setCompletionHandler(() {
+                                isSpeaking = false; // Reset the flag after TTS is done
+                              });
+                            }
+                          }
+
+                          // Log detected object details
+                          print("Detected Object $i: Class - $label, Confidence - ${detectedObject.confidence}");
+                        }
+                      }
+
+                      // Return the CustomPaint to display bounding boxes
                       return CustomPaint(
                         painter: ObjectDetectorPainter(
                           snapshot.data! as List<DetectedObject>,
@@ -124,6 +150,7 @@ class _UltralyticsYoloCameraPreviewState
                       );
                     },
                   );
+
                 case ImageClassifier:
                   return widget.classificationOverlay ??
                       StreamBuilder(
